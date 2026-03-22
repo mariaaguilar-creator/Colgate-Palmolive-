@@ -66,6 +66,7 @@ interface PaymentSettings {
   idNumber: string;
   coverImage: string;
   whatsappOrderNumber: string;
+  whatsappCountryCode?: string;
 }
 
 interface AboutSettings {
@@ -78,6 +79,8 @@ interface AboutSettings {
   brandsTitle: string;
   ordersTitle: string;
   ordersText: string;
+  bcvTitle: string;
+  bcvText: string;
 }
 
 const defaultAboutSettings: AboutSettings = {
@@ -89,7 +92,9 @@ const defaultAboutSettings: AboutSettings = {
   whyText: "Garantizamos la autenticidad de cada artículo. Nuestra prioridad es tu bienestar y el de tu familia, brindando soluciones efectivas para el día a día.",
   brandsTitle: "Nuestras Marcas",
   ordersTitle: "Logística de Pedidos",
-  ordersText: "Realizamos entregas a convenir en TODA Guacara."
+  ordersText: "Realizamos entregas a convenir en TODA Guacara.",
+  bcvTitle: "Tasa Oficial del BCV",
+  bcvText: "Nosotros cobramos a la tasa oficial del BCV"
 };
 
 const defaultPaymentSettings: PaymentSettings = {
@@ -247,7 +252,7 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeView, setActiveView] = useState<'products' | 'about' | 'payment' | 'calculator' | 'admin'>('products');
+  const [activeView, setActiveView] = useState<'products' | 'about' | 'payment' | 'calculator' | 'admin' | 'config'>('products');
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(() => {
     const cached = localStorage.getItem('payment_settings_cache');
     return cached ? JSON.parse(cached) : defaultPaymentSettings;
@@ -566,11 +571,6 @@ export default function App() {
       const email = adminEmail.trim().toLowerCase();
       const password = adminPassword;
       
-      if (email !== 'maam01proyectos@gmail.com') {
-        setLoginError('Este correo no tiene permisos de administrador.');
-        return;
-      }
-
       await signInWithEmailAndPassword(auth, email, password);
       setAdminEmail('');
       setAdminPassword('');
@@ -592,10 +592,6 @@ export default function App() {
     provider.setCustomParameters({ prompt: 'select_account' });
     try {
       const result = await signInWithPopup(auth, provider);
-      if (result.user.email?.toLowerCase() !== 'maam01proyectos@gmail.com') {
-        await signOut(auth);
-        setLoginError('La cuenta de Google seleccionada no tiene permisos de administrador.');
-      }
     } catch (error: any) {
       console.error("Google login error:", error);
       setLoginError('Error al iniciar sesión con Google.');
@@ -1034,8 +1030,8 @@ export default function App() {
                   <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20">
                     <Store size={24} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-xl font-black uppercase tracking-tight truncate">
+                  <div className="flex-1 min-w-0 text-left">
+                    <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.2em] truncate">
                       {aboutSettings.mainTitle}
                     </h2>
                     <p className="text-blue-200 text-xs font-medium truncate">
@@ -1044,13 +1040,6 @@ export default function App() {
                   </div>
                   {user && (
                     <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => handleEditAbout('mainTitle', aboutSettings.mainTitle)}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                        title="Editar Título"
-                      >
-                        <Edit2 size={12} />
-                      </button>
                       <button 
                         onClick={() => handleEditAbout('mainSubtitle', aboutSettings.mainSubtitle)}
                         className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
@@ -1134,6 +1123,26 @@ export default function App() {
                         {user && (
                           <button 
                             onClick={() => handleEditAbout('ordersText', aboutSettings.ordersText)}
+                            className="absolute -top-1 -right-1 p-1 bg-white shadow-sm rounded-full text-blue-400 hover:text-blue-600 transition-opacity border border-slate-100"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-slate-100 space-y-3">
+                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2 group">
+                        <DollarSign className="text-blue-600" size={20} />
+                        {aboutSettings.bcvTitle}
+                      </h3>
+                      <div className="relative group">
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                          {aboutSettings.bcvText}
+                        </p>
+                        {user && (
+                          <button 
+                            onClick={() => handleEditAbout('bcvText', aboutSettings.bcvText)}
                             className="absolute -top-1 -right-1 p-1 bg-white shadow-sm rounded-full text-blue-400 hover:text-blue-600 transition-opacity border border-slate-100"
                           >
                             <Edit2 size={12} />
@@ -1682,8 +1691,8 @@ export default function App() {
                 </button>
                 {user && (
                   <button 
-                    onClick={() => { setShowConfig(true); setIsMenuOpen(false); }}
-                    className="w-full flex items-center gap-3 p-4 rounded-xl transition-all font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-900"
+                    onClick={() => { setActiveView('config'); setIsMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all font-medium ${activeView === 'config' ? 'bg-blue-900 text-white' : 'text-slate-700 hover:bg-blue-50 hover:text-blue-900'}`}
                   >
                     <Settings size={20} />
                     Configuración
@@ -1927,8 +1936,8 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showConfig && (
-          <ConfigModal 
+        {activeView === 'config' && (
+          <ConfigPage 
             paymentSettings={paymentSettings}
             onSaveSettings={async (settings) => {
               setIsSyncing(true);
@@ -1946,7 +1955,7 @@ export default function App() {
             onExportExcel={exportToExcel}
             onExportPDF={exportToPDF}
             onCopySMS={copyForSMS}
-            onClose={() => setShowConfig(false)}
+            onClose={() => setActiveView('products')}
             isSyncing={isSyncing}
             products={products}
           />
@@ -2014,7 +2023,7 @@ export default function App() {
   );
 }
 
-function ConfigModal({ 
+function ConfigPage({ 
   paymentSettings, 
   onSaveSettings, 
   onExportExcel, 
@@ -2034,15 +2043,16 @@ function ConfigModal({
   products: Product[]
 }) {
   const [whatsappNumber, setWhatsappNumber] = useState(paymentSettings.whatsappOrderNumber);
+  const [countryCode, setCountryCode] = useState(paymentSettings.whatsappCountryCode || '+58');
   const [isSaving, setIsSaving] = useState(false);
   const [selectedFields, setSelectedFields] = useState<string[]>(['Nombre', 'Precio', 'Categoría', 'Presentación', 'Imagen']);
 
   const formatWhatsApp = (value: string) => {
     const digits = value.replace(/\D/g, '');
-    if (digits.length <= 4) return digits;
-    if (digits.length <= 7) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-    if (digits.length <= 9) return `${digits.slice(0, 4)}-${digits.slice(4, 7)}.${digits.slice(7)}`;
-    return `${digits.slice(0, 4)}-${digits.slice(4, 7)}.${digits.slice(7, 9)}.${digits.slice(9, 11)}`;
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    if (digits.length <= 8) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}.${digits.slice(6, 8)}.${digits.slice(8, 10)}`;
   };
 
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2059,7 +2069,8 @@ function ConfigModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSaveSettings({ ...paymentSettings, whatsappOrderNumber: whatsappNumber });
+      const combinedNumber = countryCode.replace('+', '') + whatsappNumber.replace(/\D/g, '');
+      await onSaveSettings({ ...paymentSettings, whatsappOrderNumber: combinedNumber, whatsappCountryCode: countryCode });
       onClose();
     } catch (error) {
       console.error(error);
@@ -2078,32 +2089,15 @@ function ConfigModal({
   ];
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="fixed inset-0 bg-blue-950/40 backdrop-blur-sm z-[100]"
-      />
-      <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-[100] shadow-2xl flex flex-col"
-      >
-        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-black text-blue-900 tracking-tight uppercase">Configuración</h2>
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1">Ajustes del administrador</p>
-          </div>
-          <button onClick={onClose} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-blue-900">
-            <X size={24} />
-          </button>
+    <div className="p-8 space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-blue-900 tracking-tight uppercase">Configuración</h2>
+          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1">Ajustes del administrador</p>
         </div>
+      </div>
 
-        <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+      <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
           {/* WhatsApp Section */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
@@ -2116,13 +2110,23 @@ function ConfigModal({
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="relative group flex-1">
+              <div className="relative group flex-1 flex gap-2">
+                <select 
+                  value={countryCode} 
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-2 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
+                >
+                  <option value="+58">🇻🇪 +58</option>
+                  <option value="+1">🇺🇸 +1</option>
+                  <option value="+34">🇪🇸 +34</option>
+                  <option value="+57">🇨🇴 +57</option>
+                </select>
                 <input
                   type="text"
                   value={whatsappNumber}
                   onChange={handleWhatsAppChange}
                   className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 pr-16 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
-                  placeholder="0400-000.00.00"
+                  placeholder="000-000.00.00"
                 />
                 <button
                   onClick={handleSave}
@@ -2201,15 +2205,16 @@ function ConfigModal({
             </div>
           </div>
         </div>
-      </motion.div>
-    </>
+      </div>
+    </div>
   );
 }
 
-function SortableBrandItem({ brand, onEdit, onDelete }: { 
+function SortableBrandItem({ brand, onEdit, onDelete, onMove }: { 
   brand: Brand, 
   onEdit: (b: any) => void, 
   onDelete: (id: string) => any,
+  onMove: (id: string, direction: 'up' | 'down') => void,
   key?: any
 }) {
   const {
@@ -2234,44 +2239,46 @@ function SortableBrandItem({ brand, onEdit, onDelete }: {
       style={style}
       className={`group flex items-center gap-4 bg-white border border-slate-100 rounded-2xl p-3 ${isDragging ? 'shadow-2xl ring-2 ring-blue-500/20 z-50' : 'hover:shadow-lg hover:shadow-blue-900/5'}`}
     >
-      {/* Drag Handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        className="p-2 text-slate-300 hover:text-blue-500 cursor-grab active:cursor-grabbing transition-colors flex-shrink-0"
-      >
-        <GripVertical size={20} />
-      </div>
-
-      {/* Logo Preview */}
-      <div className="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 flex-shrink-0">
-        <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
-      </div>
-
-      {/* Name and Quick Delete */}
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <p className="text-sm font-bold text-slate-700 break-words flex-1">{brand.name}</p>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(brand.id); }}
-          className="p-1 text-slate-300 hover:text-red-500 transition-colors"
-          title="Eliminar Rápido"
+      {/* Up/Down Buttons */}
+      <div className="flex flex-col gap-0.5 mr-2">
+        <button
+          onClick={() => onMove(brand.id, 'up')}
+          className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"
         >
-          <Trash2 size={14} />
+          <ChevronUp size={18} />
+        </button>
+        <button
+          onClick={() => onMove(brand.id, 'down')}
+          className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          <ChevronDown size={18} />
         </button>
       </div>
 
-      {/* Actions - Right aligned with margins */}
-      <div className="flex items-center gap-2 ml-auto pr-2">
+      {/* Brand Info */}
+      <div 
+        {...attributes}
+        {...listeners}
+        className="flex-1 flex items-center gap-4 cursor-grab active:cursor-grabbing"
+      >
+        <div className="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 flex-shrink-0">
+          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
+        </div>
+        <span className="font-bold text-blue-900">{brand.name}</span>
+      </div>
+
+      {/* Actions - Right aligned */}
+      <div className="flex items-center gap-1 ml-auto">
         <button 
           onClick={(e) => { e.stopPropagation(); onEdit(brand); }}
-          className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all hover:scale-110 active:scale-95"
+          className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
           title="Editar"
         >
           <Edit2 size={18} />
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(brand.id); }}
-          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all hover:scale-110 active:scale-95"
+          className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90"
           title="Eliminar"
         >
           <Trash2 size={18} />
@@ -2291,6 +2298,7 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
   const [imageSource, setImageSource] = useState<'url' | 'file'>('url');
   const [localBrands, setLocalBrands] = useState<Brand[]>(brands);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [brandToDelete, setBrandToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalBrands(brands);
@@ -2299,7 +2307,7 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 3,
+        distance: 1,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -2337,6 +2345,32 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
       } finally {
         setIsSyncing(false);
       }
+    }
+  };
+
+  const handleMove = async (id: string, direction: 'up' | 'down') => {
+    const index = localBrands.findIndex((b) => b.id === id);
+    if (index === -1) return;
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === localBrands.length - 1) return;
+
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    const newBrands = arrayMove(localBrands, index, newIndex);
+    setLocalBrands(newBrands);
+    
+    setIsSyncing(true);
+    try {
+      const batch = writeBatch(db);
+      newBrands.forEach((brand: Brand, index: number) => {
+        batch.update(doc(db, 'brands', brand.id), { order: index });
+      });
+      await batch.commit();
+      onSuccess();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'brands');
+      setLocalBrands(brands);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -2379,14 +2413,19 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
     }
   };
 
-  const deleteBrand = async (id: string) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta marca?')) return;
+  const deleteBrand = (id: string) => {
+    setBrandToDelete(id);
+  };
+
+  const confirmDeleteBrand = async () => {
+    if (!brandToDelete) return;
     setIsSyncing(true);
     try {
-      await deleteDoc(doc(db, 'brands', id));
+      await deleteDoc(doc(db, 'brands', brandToDelete));
+      setBrandToDelete(null);
       onSuccess();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `brands/${id}`);
+      handleFirestoreError(error, OperationType.DELETE, `brands/${brandToDelete}`);
     } finally {
       setIsSyncing(false);
     }
@@ -2565,6 +2604,7 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
                     brand={brand} 
                     onEdit={setEditingBrand} 
                     onDelete={deleteBrand} 
+                    onMove={handleMove}
                   />
                 ))}
               </SortableContext>
@@ -2586,6 +2626,40 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
             </DndContext>
           </div>
         </div>
+
+        {/* Modal de Confirmación de Eliminación de Marca */}
+        <AnimatePresence>
+          {brandToDelete && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl text-center border border-slate-100"
+              >
+                <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Trash2 size={40} />
+                </div>
+                <h3 className="text-xl font-black text-blue-900 mb-2 uppercase tracking-tight">¿Eliminar Marca?</h3>
+                <p className="text-slate-500 text-sm mb-8 font-medium">Esta acción eliminará la marca del carrusel principal y no se puede deshacer.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setBrandToDelete(null)}
+                    className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmDeleteBrand}
+                    className="flex-1 bg-red-500 text-white py-4 rounded-2xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-100"
+                  >
+                    Aceptar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
