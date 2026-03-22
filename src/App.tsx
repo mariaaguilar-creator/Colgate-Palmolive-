@@ -1264,48 +1264,42 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto"
+              className="max-w-md mx-auto"
             >
               {!user ? (
-                <div className="max-w-2xl mx-auto bg-white rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(30,58,138,0.1)] overflow-hidden border border-blue-50/50 relative">
-                  {/* Decorative blur */}
-                  <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-50 rounded-full blur-3xl opacity-60" />
-                  
-                  <div className="bg-blue-900 p-5 md:p-6 text-white text-center relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-800 to-blue-950 opacity-50" />
-                    <div className="relative z-10 flex items-center justify-center gap-4">
-                      <div className="w-10 h-10 bg-white/10 backdrop-blur-xl rounded-xl flex items-center justify-center border border-white/20 shadow-xl">
-                        <Lock size={20} strokeWidth={2} />
-                      </div>
-                      <div className="text-left">
-                        <h2 className="text-xl font-black tracking-tight uppercase leading-none">Portal Admin</h2>
-                        <p className="text-blue-200 text-[8px] font-black uppercase tracking-[0.2em] opacity-80">Credenciales Requeridas</p>
-                      </div>
+                <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+                  <div className="bg-blue-900 p-6 text-white flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20">
+                      <Lock size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black uppercase tracking-tight">Portal Admin</h2>
+                      <p className="text-blue-200 text-xs font-medium">Credenciales Requeridas</p>
                     </div>
                   </div>
                   
-                  <form onSubmit={handleLogin} className="p-6 md:p-8 space-y-5 relative z-10">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <form onSubmit={handleLogin} className="p-6 space-y-6">
+                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-900/30 ml-4">Correo Electrónico</label>
+                        <label className="text-[10px] uppercase tracking-widest font-black text-blue-900/40 ml-2">Correo Electrónico</label>
                         <input
                           type="email"
                           required
                           value={adminEmail}
                           onChange={(e) => setAdminEmail(e.target.value)}
-                          className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-3 px-6 text-blue-900 font-bold focus:border-blue-900 focus:bg-white focus:outline-none transition-all shadow-sm placeholder:text-slate-300"
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all placeholder:text-slate-200"
                           placeholder="ejemplo@correo.com"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-900/30 ml-4">Contraseña</label>
+                        <label className="text-[10px] uppercase tracking-widest font-black text-blue-900/40 ml-2">Contraseña</label>
                         <div className="relative">
                           <input
                             type={showPassword ? "text" : "password"}
                             required
                             value={adminPassword}
                             onChange={(e) => setAdminPassword(e.target.value)}
-                            className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-3 px-6 pr-14 text-blue-900 font-bold focus:border-blue-900 focus:bg-white focus:outline-none transition-all shadow-sm placeholder:text-slate-300"
+                            className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 pr-14 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all placeholder:text-slate-200"
                             placeholder="••••••••"
                           />
                           <button
@@ -1332,7 +1326,7 @@ export default function App() {
                     <div className="space-y-4">
                       <button
                         type="submit"
-                        className="w-full bg-blue-900 text-white py-4 rounded-2xl font-black text-lg hover:bg-blue-950 transition-all active:scale-95 shadow-xl shadow-blue-900/10"
+                        className="w-full bg-blue-900 text-white py-4 rounded-2xl font-bold text-base hover:bg-blue-950 transition-all active:scale-95 shadow-lg shadow-blue-100"
                       >
                         Iniciar Sesión
                       </button>
@@ -1345,7 +1339,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        className="w-full bg-white border-2 border-slate-100 text-slate-600 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-3 shadow-sm"
+                        className="w-full bg-white border-2 border-slate-100 text-slate-600 py-4 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-all active:scale-95 flex items-center justify-center gap-3 shadow-sm"
                       >
                         <img 
                           src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
