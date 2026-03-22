@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "A product available in the store",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the product" },
+        "description": { "type": "string", "description": "A detailed description of the product" },
+        "size": { "type": "string", "description": "The size or presentation of the product (e.g., 500ml, 1kg)" },
+        "price": { "type": "number", "description": "The price of the product in USD" },
+        "image": { "type": "string", "description": "URL or base64 data of the product image" },
+        "category": { 
+          "type": "string", 
+          "enum": [
+            "Cuidado Bucal",
+            "Cuidado Personal",
+            "Limpieza del Hogar",
+            "Cuidado del Cabello",
+            "Desodorantes",
+            "Jabones",
+            "Cuidado del Bebé",
+            "Cuidado de la Ropa",
+            "Fragancias",
+            "Otros"
+          ] 
+        },
+        "hidden": { "type": "boolean", "description": "Whether the product is hidden from the store" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the product was created" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the product was last updated" }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "Brand": {
+      "title": "Brand",
+      "description": "A brand logo to be displayed in the carousel",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the brand" },
+        "image": { "type": "string", "description": "URL or base64 data of the brand logo" },
+        "order": { "type": "number", "description": "The order in which the brand is displayed" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the brand was created" }
+      },
+      "required": ["name", "image"]
+    }
+  },
+  "firestore": {
+    "products": {
+      "schema": "Product",
+      "description": "Collection of products"
+    },
+    "brands": {
+      "schema": "Brand",
+      "description": "Collection of brand logos"
+    }
+  }
+}
