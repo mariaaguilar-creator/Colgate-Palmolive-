@@ -11,8 +11,26 @@ service cloud.firestore {
         (request.auth.token.email == "maam01proyectos@gmail.com");
     }
 
+    // Configuración: Lectura pública, escritura solo Admin
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Productos: Lectura pública, escritura solo Admin
     match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Brands: Lectura pública, escritura solo Admin
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Banners: Lectura pública, escritura solo Admin
+    match /banners/{bannerId} {
       allow read: if true;
       allow write: if isAdmin();
     }
