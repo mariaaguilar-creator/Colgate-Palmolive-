@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Minus, Trash2, Send, Search, X, Menu as MenuIcon, Check, Info, CreditCard, Store, Copy, TrendingUp, Calculator, MapPin, Truck, Lock, LogOut, Edit2, Eye, EyeOff, Save, Image as ImageIcon, Upload, RefreshCw, ArrowLeft, Download, FileText, Share2, ChevronDown, ChevronUp, Link, Package, Tag, DollarSign, Settings, Target, ShieldCheck, Award, GripVertical } from 'lucide-react';
+import React, { useState, useEffect, useRef, Component, ReactNode } from 'react';
+import { ShoppingCart, Plus, Minus, Trash2, Send, Search, X, Menu as MenuIcon, Check, Info, CreditCard, Store, Copy, TrendingUp, Calculator, MapPin, Truck, Lock, LogOut, Edit2, Eye, EyeOff, Save, Image as ImageIcon, Upload, RefreshCw, ArrowLeft, Download, FileText, Share2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Link, Package, Tag, DollarSign, Settings, Target, ShieldCheck, Award, GripVertical, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { products as initialProducts, Product as BaseProduct } from './data/products';
 import { auth, db } from './firebase';
@@ -59,6 +59,12 @@ export interface Brand {
   order?: number;
 }
 
+export interface Banner {
+  id: string;
+  image: string;
+  order: number;
+}
+
 interface PaymentSettings {
   bank: string;
   phone: string;
@@ -67,6 +73,8 @@ interface PaymentSettings {
   coverImage: string;
   whatsappOrderNumber: string;
   whatsappCountryCode?: string;
+  appLogo?: string;
+  appTitle?: string;
 }
 
 interface AboutSettings {
@@ -81,20 +89,22 @@ interface AboutSettings {
   ordersText: string;
   bcvTitle: string;
   bcvText: string;
+  bcvBanner: string;
 }
 
 const defaultAboutSettings: AboutSettings = {
   mainTitle: "Sobre Nosotros",
-  mainSubtitle: "Calidad y confianza en cada producto para tu hogar y cuidado personal.",
+  mainSubtitle: "Tu bienestar es nuestra prioridad",
   missionTitle: "Nuestra Misión",
   missionText: "Te ofrecemos exclusivamente productos originales de Colgate-Palmolive. Desde la protección anticaries líder en el mundo hasta la suavidad y limpieza de tus marcas favoritas.",
   whyTitle: "¿Por qué elegirnos?",
-  whyText: "Garantizamos la autenticidad de cada artículo. Nuestra prioridad es tu bienestar y el de tu familia, brindando soluciones efectivas para el día a día.",
+  whyText: "Garantizamos la autenticidad de cada artículo. Nuestra prioridad es tu bienestar y el de tu familia brindando soluciones efectivas para el día a día.",
   brandsTitle: "Nuestras Marcas",
   ordersTitle: "Logística de Pedidos",
   ordersText: "Realizamos entregas a convenir en TODA Guacara.",
-  bcvTitle: "Tasa Oficial del BCV",
-  bcvText: "Nosotros cobramos a la tasa oficial del BCV"
+  bcvTitle: "Trabajamos al BCV",
+  bcvText: "Nosotros cobramos a la tasa oficial del BCV",
+  bcvBanner: "https://picsum.photos/seed/banner/1400/400"
 };
 
 const defaultPaymentSettings: PaymentSettings = {
@@ -103,7 +113,10 @@ const defaultPaymentSettings: PaymentSettings = {
   idType: 'V',
   idNumber: '27.267.152',
   coverImage: 'https://lh3.googleusercontent.com/d/1OOUHFer-bElvR3GWJGn9XWmSDRG5Q4DB',
-  whatsappOrderNumber: '584244244387'
+  whatsappOrderNumber: '584244244387',
+  whatsappCountryCode: '+58',
+  appLogo: 'https://lh3.googleusercontent.com/d/1Kwg-JePUR7s7tSQ7iNA_nsuZ9DCElss2',
+  appTitle: 'Colgate-Palmolive'
 };
 
 const VENEZUELAN_BANKS = [
@@ -182,18 +195,104 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
+  
+  const isQuotaError = errInfo.error.includes('Quota limit exceeded') || errInfo.error.includes('Quota exceeded');
+  
+  if (isQuotaError) {
+    console.error('Firestore Quota Exceeded:', JSON.stringify(errInfo));
+    // For quota errors, we want the ErrorBoundary to catch it and show a nice UI
+    throw new Error(JSON.stringify(errInfo));
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   
   if (errInfo.error.includes('insufficient permissions')) {
     console.warn('Firestore Permission Error (handled):', errInfo);
-    // No lanzamos error para LIST para permitir que el cache local funcione
     if (operationType === OperationType.LIST) return;
-    alert('Error: No tienes permisos suficientes para realizar esta acción.');
-  } else {
-    alert(`Error al procesar la solicitud: ${errInfo.error}`);
   }
   
   throw new Error(JSON.stringify(errInfo));
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState;
+  public props: ErrorBoundaryProps;
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+    this.props = props;
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let errorMessage = "Algo salió mal.";
+      let isQuotaError = false;
+
+      try {
+        const errObj = JSON.parse(this.state.error?.message || "{}");
+        if (errObj.error && (errObj.error.includes("Quota limit exceeded") || errObj.error.includes("Quota exceeded"))) {
+          isQuotaError = true;
+          errorMessage = "Se ha alcanzado el límite de cuota gratuita de Firestore por hoy.";
+        } else {
+          errorMessage = errObj.error || errorMessage;
+        }
+      } catch (e) {
+        errorMessage = this.state.error?.message || errorMessage;
+      }
+
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
+          <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-slate-100 space-y-6">
+            <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500">
+              <Info size={40} />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-blue-900 uppercase tracking-tight">
+                {isQuotaError ? "Límite de Cuota Alcanzado" : "Error en la Aplicación"}
+              </h2>
+              <p className="text-slate-600 font-medium leading-relaxed">
+                {isQuotaError 
+                  ? "La aplicación ha realizado demasiadas lecturas a la base de datos hoy. La cuota se reiniciará automáticamente mañana."
+                  : errorMessage}
+              </p>
+              {isQuotaError && (
+                <p className="text-xs text-slate-400 pt-4">
+                  Para más información, consulte la documentación de cuotas de Firebase Spark Plan.
+                </p>
+              )}
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 bg-blue-900 text-white rounded-2xl font-bold shadow-lg shadow-blue-900/20 hover:bg-blue-950 transition-all flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={20} />
+              Reintentar
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function BrandsCarousel({ brands }: { brands: Brand[] }) {
@@ -222,8 +321,8 @@ function BrandsCarousel({ brands }: { brands: Brand[] }) {
             className="flex-shrink-0 w-20 h-20 bg-white rounded-full border border-slate-200 shadow-sm flex items-center justify-center transition-all duration-500 group overflow-hidden"
           >
             <img
-              src={brand.image}
-              alt={brand.name}
+              src={brand?.image}
+              alt={brand?.name}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               referrerPolicy="no-referrer"
             />
@@ -234,7 +333,84 @@ function BrandsCarousel({ brands }: { brands: Brand[] }) {
   );
 }
 
+const BannerCarousel = ({ banners, showBanner }: { banners: Banner[], showBanner: boolean }) => {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (banners.length > 0 && current >= banners.length) {
+      setCurrent(0);
+    }
+  }, [banners.length, current]);
+
+  const next = () => {
+    if (banners.length === 0) return;
+    setCurrent((prev) => (prev + 1) % banners.length);
+  };
+  
+  const prev = () => {
+    if (banners.length === 0) return;
+    setCurrent((prev) => (prev - 1 + banners.length) % banners.length);
+  };
+
+  useEffect(() => {
+    if (!showBanner || banners.length === 0) return;
+    const timer = setInterval(next, 5000);
+    return () => clearInterval(timer);
+  }, [banners.length, showBanner]);
+
+  if (!showBanner || banners.length === 0 || !banners[current]) return null;
+
+  return (
+    <div className="w-full mx-auto mt-0 mb-4 px-0">
+      <div className="relative w-full aspect-[1400/400] overflow-hidden rounded-none shadow-2xl group">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={current}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ 
+              x: { type: "spring", stiffness: 300, damping: 30 },
+              opacity: { duration: 0.2 }
+            }}
+            className="absolute inset-0"
+          >
+            <img
+              src={banners[current]?.image}
+              alt={`Banner ${current + 1}`}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Arrows */}
+        <button 
+          onClick={prev}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-transparent text-white/30 hover:text-white transition-all active:scale-90"
+        >
+          <ChevronLeft size={32} />
+        </button>
+        <button 
+          onClick={next}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 p-2 bg-transparent text-white/30 hover:text-white transition-all active:scale-90"
+        >
+          <ChevronRight size={32} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const [products, setProducts] = useState<Product[]>(() => {
     // Intentar cargar desde cache local para velocidad instantánea
     const cached = localStorage.getItem('firestore_products_cache');
@@ -248,7 +424,10 @@ export default function App() {
     // Si no hay cache, mostrar los iniciales para que no se vea vacío
     return initialProducts.map(p => ({ ...p, hidden: false }));
   });
-  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brands, setBrands] = useState<Brand[]>(() => {
+    const cached = localStorage.getItem('firestore_brands_cache');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -263,12 +442,28 @@ export default function App() {
   });
   const [editingAboutField, setEditingAboutField] = useState<keyof AboutSettings | null>(null);
   const [tempAboutValue, setTempAboutValue] = useState('');
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editingAboutField && editorRef.current) {
+      editorRef.current.innerHTML = tempAboutValue;
+    }
+  }, [editingAboutField]);
+
+  const applyStyle = (style: 'bold' | 'italic' | 'justifyFull') => {
+    document.execCommand(style, false);
+    if (editorRef.current) {
+      setTempAboutValue(editorRef.current.innerHTML);
+    }
+  };
   const [isEditingPaymentData, setIsEditingPaymentData] = useState(false);
   const [isEditingPaymentCover, setIsEditingPaymentCover] = useState(false);
   const [paymentCoverSource, setPaymentCoverSource] = useState<'url' | 'file'>('url');
   const [tempPaymentSettings, setTempPaymentSettings] = useState<PaymentSettings>(paymentSettings);
   const [calcAmount, setCalcAmount] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [copiedUSD, setCopiedUSD] = useState(false);
+  const [copiedFull, setCopiedFull] = useState(false);
   const [calcCopied, setCalcCopied] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(() => localStorage.getItem('bcv_last_update_time'));
 
@@ -291,6 +486,19 @@ export default function App() {
     const cached = localStorage.getItem('bcv_rate');
     return cached ? parseFloat(cached) : null;
   });
+  const [banners, setBanners] = useState<Banner[]>(() => {
+    const cached = localStorage.getItem('banners_cache');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [showBanner, setShowBanner] = useState<boolean>(() => {
+    const cached = localStorage.getItem('show_banner_cache');
+    return cached ? JSON.parse(cached) : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('banners_cache', JSON.stringify(banners));
+    localStorage.setItem('show_banner_cache', JSON.stringify(showBanner));
+  }, [banners, showBanner]);
 
   // Admin State
   const [user, setUser] = useState<User | null>(null);
@@ -301,6 +509,7 @@ export default function App() {
   const [showBrandManager, setShowBrandManager] = useState(false);
 
   const getBase64FromUrl = async (url: string): Promise<string> => {
+    if (!url) return "";
     if (url.startsWith('data:')) return url;
     try {
       const response = await fetch(url);
@@ -329,7 +538,6 @@ export default function App() {
       if (fields.includes('Presentación')) columns.push({ header: 'CONTENIDO', key: 'size', width: 15 });
       if (fields.includes('Precio')) columns.push({ header: 'Precio', key: 'price', width: 15 });
       if (fields.includes('Descripción')) columns.push({ header: 'Descripción', key: 'description', width: 40 });
-      if (fields.includes('Imagen')) columns.push({ header: 'Imagen', key: 'image', width: 25 });
 
       worksheet.columns = columns;
 
@@ -406,7 +614,6 @@ export default function App() {
       if (fields.includes('Presentación')) head.push('Presentación');
       if (fields.includes('Precio')) head.push('Precio');
       if (fields.includes('Descripción')) head.push('Descripción');
-      if (fields.includes('Imagen')) head.push('Imagen');
 
       const tableData = [];
       for (const p of products) {
@@ -417,11 +624,6 @@ export default function App() {
         if (fields.includes('Precio')) row.push(`$${p.price.toFixed(2)}`);
         if (fields.includes('Descripción')) row.push(p.description);
         
-        let imgBase64 = '';
-        if (fields.includes('Imagen') && p.image) {
-          imgBase64 = await getBase64FromUrl(p.image);
-        }
-        if (fields.includes('Imagen')) row.push(imgBase64);
         tableData.push(row);
       }
 
@@ -511,8 +713,26 @@ export default function App() {
         id: doc.id
       })) as Brand[];
       setBrands(brandsData);
+      if (brandsData.length > 0) {
+        localStorage.setItem('firestore_brands_cache', JSON.stringify(brandsData));
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'brands');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Firestore Banners Subscription
+  useEffect(() => {
+    const q = query(collection(db, 'banners'), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const bannersData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as Banner[];
+      setBanners(bannersData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'banners');
     });
     return () => unsubscribe();
   }, []);
@@ -778,6 +998,34 @@ export default function App() {
     window.open(`https://wa.me/${phoneNumber}?text=${encodedMessage}`, '_blank');
   };
 
+  const copyOrderUSD = () => {
+    let message = 'El pedido es el siguiente:\n\n';
+    cart.forEach(item => {
+      message += `• ${item.name} (${item.size}) x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`;
+    });
+    message += `\n*Total a pagar: $${cartTotal.toFixed(2)}*`;
+    navigator.clipboard.writeText(message);
+    setCopiedUSD(true);
+    setTimeout(() => setCopiedUSD(false), 2000);
+  };
+
+  const copyOrderFull = () => {
+    let message = 'El pedido es el siguiente:\n\n';
+    cart.forEach(item => {
+      message += `• ${item.name} (${item.size}) x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}\n`;
+    });
+    message += `\n*Total a pagar: $${cartTotal.toFixed(2)}*`;
+    message += `\n*Total en Bs (BCV): Bs. ${(cartTotal * (bcvRate || 60.00)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*`;
+    
+    if (bcvRate) {
+      message += `\n\n_Tasa BCV del día: Bs. ${bcvRate.toFixed(2)}_`;
+    }
+    
+    navigator.clipboard.writeText(message);
+    setCopiedFull(true);
+    setTimeout(() => setCopiedFull(false), 2000);
+  };
+
   const goHome = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsCartOpen(false);
@@ -818,15 +1066,10 @@ export default function App() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </div>
-                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">Tasa Oficial BCV</span>
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">
+                    Tasa Oficial BCV - {bcvRate ? `Bs. ${bcvRate.toFixed(2)}` : '...'}
+                  </span>
                 </div>
-                
-                <div className="h-4 w-[1px] bg-blue-700/50"></div>
-
-                <span className="text-xs sm:text-sm font-black tracking-wider flex items-center gap-1">
-                  <span className="text-blue-300 font-bold">Bs.</span>
-                  {bcvRate ? bcvRate.toFixed(2) : '...'}
-                </span>
               </div>
             </a>
           );
@@ -863,13 +1106,15 @@ export default function App() {
             >
               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-sm border border-slate-100">
                 <img 
-                  src="https://lh3.googleusercontent.com/d/1Kwg-JePUR7s7tSQ7iNA_nsuZ9DCElss2" 
-                  alt="Logo Colgate-Palmolive" 
+                  src={paymentSettings.appLogo || 'https://lh3.googleusercontent.com/d/1Kwg-JePUR7s7tSQ7iNA_nsuZ9DCElss2'} 
+                  alt={`Logo ${paymentSettings.appTitle || 'App'}`} 
                   className="w-full h-full object-contain p-1"
                   referrerPolicy="no-referrer"
                 />
               </div>
-              <h1 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-blue-900 whitespace-nowrap">Colgate-Palmolive</h1>
+              <h1 className="text-base sm:text-lg md:text-xl font-bold tracking-tight text-blue-900 whitespace-nowrap">
+                {paymentSettings.appTitle || 'Colgate-Palmolive'}
+              </h1>
             </button>
           </div>
 
@@ -882,6 +1127,16 @@ export default function App() {
               </span>
             </div>
             
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center p-2 text-blue-900 hover:bg-slate-100 rounded-full transition-colors"
+                title="Cerrar Sesión"
+              >
+                <LogOut size={24} />
+              </button>
+            )}
+
             {activeView !== 'admin' && (
               <button 
                 onClick={() => setIsCartOpen(true)}
@@ -900,7 +1155,13 @@ export default function App() {
       </header>
     </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      {activeView === 'products' && (
+        <div className="w-full bg-white pt-0">
+          <BannerCarousel banners={banners} showBanner={showBanner} />
+        </div>
+      )}
+
+      <main className={`max-w-7xl mx-auto px-4 ${activeView === 'products' ? 'pt-0 pb-8' : 'py-8'}`}>
         <AnimatePresence mode="wait">
           {activeView === 'products' ? (
             <motion.div
@@ -908,10 +1169,10 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
+              className="flex flex-col"
             >
               {/* Product Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 mt-2 sm:mt-4">
                 <AnimatePresence mode="popLayout">
                   {filteredProducts.map(product => (
                     <motion.div
@@ -923,12 +1184,11 @@ export default function App() {
                       className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col"
                     >
             <div 
-              className="aspect-square relative overflow-hidden bg-slate-50 cursor-pointer group/img"
-              onClick={() => setSelectedImage(product.image)}
+              className="aspect-square relative overflow-hidden bg-slate-50 group/img"
             >
               <img
-                src={product.image}
-                alt={product.name}
+                src={product?.image}
+                alt={product?.name}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-contain p-2 sm:p-4 group-hover/img:scale-110 transition-transform duration-500"
               />
@@ -1016,6 +1276,28 @@ export default function App() {
                   <p className="text-blue-800">Selecciona otra categoría para ver más productos</p>
                 </div>
               )}
+
+              {/* Marcas en la vista de productos */}
+              <div className="mt-6 pt-4 border-t border-slate-100 space-y-3">
+                <div className="flex items-center justify-between group">
+                  <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                      <Tag size={18} />
+                    </div>
+                    <span dangerouslySetInnerHTML={{ __html: aboutSettings.brandsTitle }}></span>
+                  </h3>
+                  {user && (
+                    <button 
+                      onClick={() => setShowBrandManager(true)}
+                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all shadow-sm border border-blue-100"
+                      title="Gestionar Marcas"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  )}
+                </div>
+                <BrandsCarousel brands={brands} />
+              </div>
             </motion.div>
           ) : activeView === 'about' ? (
             <motion.div
@@ -1031,36 +1313,25 @@ export default function App() {
                     <Store size={24} />
                   </div>
                   <div className="flex-1 min-w-0 text-left">
-                    <h2 className="text-sm sm:text-base font-black uppercase tracking-[0.2em] truncate">
-                      {aboutSettings.mainTitle}
+                    <h2 className="text-xl font-black uppercase tracking-tight truncate" dangerouslySetInnerHTML={{ __html: aboutSettings.mainTitle }}>
                     </h2>
                     <p className="text-blue-200 text-xs font-medium truncate">
-                      {aboutSettings.mainSubtitle}
+                      Tu bienestar es nuestra prioridad
                     </p>
                   </div>
-                  {user && (
-                    <div className="flex flex-col gap-2">
-                      <button 
-                        onClick={() => handleEditAbout('mainSubtitle', aboutSettings.mainSubtitle)}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all"
-                        title="Editar Subtítulo"
-                      >
-                        <Edit2 size={12} />
-                      </button>
-                    </div>
-                  )}
                 </div>
                 
                 <div className="p-6 space-y-8">
                   <div className="space-y-6">
                     <div className="space-y-3">
-                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2 group">
-                        <Target className="text-blue-600" size={20} />
-                        {aboutSettings.missionTitle}
+                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3 group">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                          <Target size={18} />
+                        </div>
+                        <span dangerouslySetInnerHTML={{ __html: aboutSettings.missionTitle }}></span>
                       </h3>
                       <div className="relative group">
-                        <p className="text-sm text-slate-600 leading-relaxed">
-                          {aboutSettings.missionText}
+                        <p className="text-sm text-slate-600 leading-relaxed text-justify" dangerouslySetInnerHTML={{ __html: aboutSettings.missionText }}>
                         </p>
                         {user && (
                           <button 
@@ -1073,13 +1344,14 @@ export default function App() {
                       </div>
                     </div>
                     <div className="space-y-3">
-                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2 group">
-                        <ShieldCheck className="text-blue-600" size={20} />
-                        {aboutSettings.whyTitle}
+                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3 group">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                          <Award size={18} />
+                        </div>
+                        <span dangerouslySetInnerHTML={{ __html: aboutSettings.whyTitle }}></span>
                       </h3>
                       <div className="relative group">
-                        <p className="text-sm text-slate-600 leading-relaxed">
-                          {aboutSettings.whyText}
+                        <p className="text-sm text-slate-600 leading-relaxed text-justify" dangerouslySetInnerHTML={{ __html: aboutSettings.whyText }}>
                         </p>
                         {user && (
                           <button 
@@ -1092,11 +1364,13 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="pt-8 border-t border-slate-100 space-y-3">
+                    <div className="pt-4 border-t border-slate-100 space-y-3">
                       <div className="flex items-center justify-between group">
-                        <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                          <Award className="text-blue-600" size={20} />
-                          {aboutSettings.brandsTitle}
+                        <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                            <Tag size={18} />
+                          </div>
+                          <span dangerouslySetInnerHTML={{ __html: aboutSettings.brandsTitle }}></span>
                         </h3>
                         {user && (
                           <button 
@@ -1112,13 +1386,14 @@ export default function App() {
                     </div>
 
                     <div className="pt-8 border-t border-slate-100 space-y-3">
-                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2 group">
-                        <Package className="text-blue-600" size={20} />
-                        {aboutSettings.ordersTitle}
+                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3 group">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                          <Truck size={18} />
+                        </div>
+                        <span dangerouslySetInnerHTML={{ __html: aboutSettings.ordersTitle }}></span>
                       </h3>
                       <div className="relative group">
-                        <p className="text-sm text-slate-600 leading-relaxed">
-                          {aboutSettings.ordersText}
+                        <p className="text-sm text-slate-600 leading-relaxed text-justify" dangerouslySetInnerHTML={{ __html: aboutSettings.ordersText }}>
                         </p>
                         {user && (
                           <button 
@@ -1132,14 +1407,31 @@ export default function App() {
                     </div>
 
                     <div className="pt-8 border-t border-slate-100 space-y-3">
-                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2 group">
-                        <DollarSign className="text-blue-600" size={20} />
-                        {aboutSettings.bcvTitle}
+                      <h3 className="text-lg font-bold text-blue-900 flex items-center gap-3 group">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                          <TrendingUp size={18} />
+                        </div>
+                        <span dangerouslySetInnerHTML={{ __html: aboutSettings.bcvTitle }}></span>
                       </h3>
                       <div className="relative group">
-                        <p className="text-sm text-slate-600 leading-relaxed">
-                          {aboutSettings.bcvText}
+                        <p className="text-sm text-slate-600 leading-relaxed text-justify" dangerouslySetInnerHTML={{ __html: aboutSettings.bcvText }}>
                         </p>
+                        <div className="mt-4 relative group">
+                          <img 
+                            src={aboutSettings.bcvBanner} 
+                            alt="Banner Informativo" 
+                            className="w-full h-auto rounded-2xl shadow-sm"
+                            referrerPolicy="no-referrer"
+                          />
+                          {user && (
+                            <button 
+                              onClick={() => handleEditAbout('bcvBanner', aboutSettings.bcvBanner)}
+                              className="absolute top-2 right-2 p-2 bg-white shadow-sm rounded-full text-blue-400 hover:text-blue-600 transition-opacity border border-slate-100"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                        </div>
                         {user && (
                           <button 
                             onClick={() => handleEditAbout('bcvText', aboutSettings.bcvText)}
@@ -1367,6 +1659,7 @@ export default function App() {
                   onLogout={handleLogout} 
                   isSyncing={isSyncing}
                   setIsSyncing={setIsSyncing}
+                  setActiveView={setActiveView}
                   onSuccess={() => {
                     setShowSuccessToast(true);
                     setTimeout(() => setShowSuccessToast(false), 3000);
@@ -1375,6 +1668,33 @@ export default function App() {
                 />
               )}
             </motion.div>
+          ) : activeView === 'config' ? (
+            <ConfigPage 
+              paymentSettings={paymentSettings}
+              onSaveSettings={async (settings) => {
+                setIsSyncing(true);
+                try {
+                  await setDoc(doc(db, 'settings', 'payment'), settings);
+                  setPaymentSettings(settings);
+                  setShowSuccessToast(true);
+                  setTimeout(() => setShowSuccessToast(false), 3000);
+                } catch (error) {
+                  handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+              onExportExcel={exportToExcel}
+              onExportPDF={exportToPDF}
+              onCopySMS={copyForSMS}
+              onClose={() => setActiveView('products')}
+              isSyncing={isSyncing}
+              products={products}
+              banners={banners}
+              setBanners={setBanners}
+              showBanner={showBanner}
+              setShowBanner={setShowBanner}
+            />
           ) : (
             <motion.div
               key="calculator"
@@ -1411,7 +1731,7 @@ export default function App() {
 
                   <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100 space-y-4">
                     <div className="flex items-center justify-between text-blue-400">
-                      <span className="text-[10px] uppercase tracking-widest font-black">Tasa Oficial BCV</span>
+                      <span className="text-[10px] uppercase tracking-widest font-black">Trabajamos al BCV</span>
                       <span className="font-black text-xs">Bs. {(bcvRate || 60.00).toFixed(2)}</span>
                     </div>
                     <div className="space-y-1">
@@ -1537,8 +1857,8 @@ export default function App() {
                     <div key={item.id} className="flex gap-4">
                       <div className="w-20 h-20 bg-slate-50 rounded-2xl flex-shrink-0 overflow-hidden border border-slate-100">
                         <img 
-                          src={item.image} 
-                          alt={item.name} 
+                          src={item?.image} 
+                          alt={item?.name} 
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-contain p-2"
                         />
@@ -1593,29 +1913,42 @@ export default function App() {
                         </span>
                       </div>
                     </div>
-                    <button
-                      onClick={sendOrder}
-                      className="w-full bg-blue-900 hover:bg-blue-950 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-blue-200 transition-all active:scale-[0.98]"
-                    >
-                      <Send size={20} />
-                      Enviar pedido al WhatsApp
-                    </button>
+                    {!user && (
+                      <button
+                        onClick={sendOrder}
+                        className="w-full bg-blue-900 hover:bg-blue-950 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-blue-200 transition-all active:scale-[0.98]"
+                      >
+                        <Send size={20} />
+                        Enviar pedido al WhatsApp
+                      </button>
+                    )}
                   </>
                 )}
 
-
-                
                 <button
-                  onClick={() => setIsCartOpen(false)}
+                  onClick={() => { setIsCartOpen(false); setActiveView('products'); }}
                   className="w-full bg-white border-2 border-blue-900 text-blue-900 py-3.5 rounded-2xl font-bold hover:bg-blue-50 transition-all active:scale-[0.98]"
                 >
-                  Seguir añadiendo al carrito
+                  {cart.length === 0 ? "Añadir al carrito" : "Seguir añadiendo al carrito"}
                 </button>
 
-                {cart.length > 0 && (
-                  <p className="text-[10px] text-center text-slate-400 uppercase tracking-widest font-bold pt-1">
-                    TASA OFICIAL DEL BCV - ENTREGA A CONVENIR
-                  </p>
+                {cart.length > 0 && user && (
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={copyOrderUSD}
+                      className="flex-1 bg-blue-900 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-blue-950 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
+                    >
+                      <Copy size={14} className={copiedUSD ? "text-emerald-400" : ""} />
+                      {copiedUSD ? "¡Copiado!" : "Total $"}
+                    </button>
+                    <button
+                      onClick={copyOrderFull}
+                      className="flex-1 bg-blue-900 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-blue-950 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
+                    >
+                      <Copy size={14} className={copiedFull ? "text-emerald-400" : ""} />
+                      {copiedFull ? "¡Copiado!" : "Total Bs"}
+                    </button>
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -1936,33 +2269,6 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {activeView === 'config' && (
-          <ConfigPage 
-            paymentSettings={paymentSettings}
-            onSaveSettings={async (settings) => {
-              setIsSyncing(true);
-              try {
-                await setDoc(doc(db, 'settings', 'payment'), settings);
-                setPaymentSettings(settings);
-                setShowSuccessToast(true);
-                setTimeout(() => setShowSuccessToast(false), 3000);
-              } catch (error) {
-                handleFirestoreError(error, OperationType.UPDATE, 'settings/payment');
-              } finally {
-                setIsSyncing(false);
-              }
-            }}
-            onExportExcel={exportToExcel}
-            onExportPDF={exportToPDF}
-            onCopySMS={copyForSMS}
-            onClose={() => setActiveView('products')}
-            isSyncing={isSyncing}
-            products={products}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showBrandManager && (
           <BrandManager 
             brands={brands}
@@ -1989,24 +2295,60 @@ export default function App() {
                 <button onClick={() => setEditingAboutField(null)} className="p-2 hover:bg-white rounded-xl transition-colors text-slate-400"><X size={20} /></button>
               </div>
               <div className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Contenido</label>
-                  {editingAboutField.toLowerCase().includes('text') ? (
-                    <textarea 
-                      value={tempAboutValue}
-                      onChange={(e) => setTempAboutValue(e.target.value)}
-                      rows={5}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:border-blue-500 focus:outline-none transition-all resize-none"
-                    />
-                  ) : (
-                    <input 
+                {editingAboutField === 'bcvBanner' ? (
+                  <div className="space-y-4">
+                    <input
                       type="text"
-                      value={tempAboutValue}
+                      value={tempAboutValue.startsWith('data:') ? '' : tempAboutValue}
                       onChange={(e) => setTempAboutValue(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 font-bold focus:border-blue-500 focus:outline-none transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:border-blue-500 focus:outline-none transition-all"
+                      placeholder="URL de la imagen"
                     />
-                  )}
-                </div>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => setTempAboutValue(reader.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden"
+                        id="banner-upload"
+                      />
+                      <label
+                        htmlFor="banner-upload"
+                        className="flex items-center justify-center gap-2 w-full bg-white border-2 border-dashed border-slate-200 rounded-2xl py-4 px-6 text-slate-500 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all"
+                      >
+                        <Upload size={18} />
+                        <span className="text-xs font-bold uppercase tracking-wider">Subir desde Galería</span>
+                      </label>
+                    </div>
+                    {tempAboutValue && (
+                      <div className="w-full h-32 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 p-2">
+                        <img src={tempAboutValue} alt="Preview" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Contenido</label>
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => applyStyle('bold')} className="px-4 py-2 bg-slate-100 rounded-md text-sm font-black hover:bg-slate-200 transition-all active:scale-95">B</button>
+                      </div>
+                    </div>
+                    <div 
+                      ref={editorRef}
+                      contentEditable
+                      onInput={(e) => setTempAboutValue(e.currentTarget.innerHTML)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:border-blue-500 focus:outline-none transition-all min-h-[120px] max-h-[300px] overflow-y-auto"
+                    />
+                  </div>
+                )}
                 <button 
                   onClick={saveAboutEdit}
                   className="w-full bg-blue-900 text-white py-4 rounded-2xl font-bold hover:bg-blue-950 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
@@ -2031,7 +2373,11 @@ function ConfigPage({
   onCopySMS, 
   onClose,
   isSyncing,
-  products
+  products,
+  banners,
+  setBanners,
+  showBanner,
+  setShowBanner
 }: {
   paymentSettings: PaymentSettings,
   onSaveSettings: (settings: PaymentSettings) => Promise<void>,
@@ -2040,13 +2386,13 @@ function ConfigPage({
   onCopySMS: (fields: string[]) => void,
   onClose: () => void,
   isSyncing: boolean,
-  products: Product[]
+  products: Product[],
+  banners: Banner[],
+  setBanners: (b: Banner[]) => void,
+  showBanner: boolean,
+  setShowBanner: (s: boolean) => void
 }) {
-  const [whatsappNumber, setWhatsappNumber] = useState(paymentSettings.whatsappOrderNumber);
-  const [countryCode, setCountryCode] = useState(paymentSettings.whatsappCountryCode || '+58');
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedFields, setSelectedFields] = useState<string[]>(['Nombre', 'Precio', 'Categoría', 'Presentación', 'Imagen']);
-
+  const [showBannerManager, setShowBannerManager] = useState(false);
   const formatWhatsApp = (value: string) => {
     const digits = value.replace(/\D/g, '');
     if (digits.length <= 3) return digits;
@@ -2054,6 +2400,21 @@ function ConfigPage({
     if (digits.length <= 8) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}.${digits.slice(6)}`;
     return `${digits.slice(0, 3)}-${digits.slice(3, 6)}.${digits.slice(6, 8)}.${digits.slice(8, 10)}`;
   };
+
+  const [whatsappNumber, setWhatsappNumber] = useState(() => {
+    const fullNumber = paymentSettings.whatsappOrderNumber || '';
+    const code = (paymentSettings.whatsappCountryCode || '+58').replace('+', '');
+    if (fullNumber.startsWith(code)) {
+      return formatWhatsApp(fullNumber.slice(code.length));
+    }
+    return formatWhatsApp(fullNumber);
+  });
+  const [countryCode, setCountryCode] = useState(paymentSettings.whatsappCountryCode || '+58');
+  const [appLogo, setAppLogo] = useState(paymentSettings.appLogo || '');
+  const [appTitle, setAppTitle] = useState(paymentSettings.appTitle || '');
+  const [logoSource, setLogoSource] = useState<'url' | 'file'>('url');
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedFields, setSelectedFields] = useState<string[]>(['Nombre', 'Precio', 'Categoría', 'Presentación', 'Imagen']);
 
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatWhatsApp(e.target.value);
@@ -2066,11 +2427,28 @@ function ConfigPage({
     );
   };
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAppLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
       const combinedNumber = countryCode.replace('+', '') + whatsappNumber.replace(/\D/g, '');
-      await onSaveSettings({ ...paymentSettings, whatsappOrderNumber: combinedNumber, whatsappCountryCode: countryCode });
+      await onSaveSettings({ 
+        ...paymentSettings, 
+        whatsappOrderNumber: combinedNumber, 
+        whatsappCountryCode: countryCode,
+        appLogo,
+        appTitle
+      });
       onClose();
     } catch (error) {
       console.error(error);
@@ -2084,58 +2462,222 @@ function ConfigPage({
     { id: 'Precio', label: 'Precio' },
     { id: 'Categoría', label: 'Categoría' },
     { id: 'Presentación', label: 'CONTENIDO' },
-    { id: 'Descripción', label: 'Descripción' },
-    { id: 'Imagen', label: 'Imagen' }
+    { id: 'Descripción', label: 'Descripción' }
   ];
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-black text-blue-900 tracking-tight uppercase">Configuración</h2>
-          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1">Ajustes del administrador</p>
+    <motion.div
+      key="config"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="max-w-4xl mx-auto"
+    >
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        <div className="bg-blue-900 p-6 text-white flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20">
+              <Settings size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tight">Configuración</h2>
+              <p className="text-blue-200 text-xs font-medium">Ajustes del administrador</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
-          {/* WhatsApp Section */}
+        <div className="p-4 sm:p-8 space-y-8">
+          {/* Company Identity Section */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                <Send size={20} />
+              <div className="w-10 h-10 bg-blue-50 text-blue-900 rounded-xl flex items-center justify-center">
+                <Layout size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-black text-blue-900 uppercase">WhatsApp de Pedidos</h3>
-                <p className="text-[10px] text-slate-400 font-bold">Número que recibe los pedidos</p>
+                <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight">IDENTIDAD DE LA EMPRESA</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Logo y nombre de la empresa</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <div className="relative group flex-1 flex gap-2">
-                <select 
-                  value={countryCode} 
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-2 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
-                >
-                  <option value="+58">🇻🇪 +58</option>
-                  <option value="+1">🇺🇸 +1</option>
-                  <option value="+34">🇪🇸 +34</option>
-                  <option value="+57">🇨🇴 +57</option>
-                </select>
-                <input
-                  type="text"
-                  value={whatsappNumber}
-                  onChange={handleWhatsAppChange}
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-2xl py-4 px-6 pr-16 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
-                  placeholder="000-000.00.00"
-                />
+
+            <div className="space-y-6">
+              {/* Company Name */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase tracking-widest font-black text-blue-900/40 ml-2">Nombre de la Empresa</label>
+                  <input
+                    type="text"
+                    value={appTitle}
+                    onChange={(e) => setAppTitle(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
+                    placeholder="Nombre de la empresa"
+                  />
+                </div>
                 <button
                   onClick={handleSave}
                   disabled={isSaving || isSyncing}
-                  className="absolute right-2 top-2 bottom-2 bg-blue-900 text-white px-4 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-950 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center"
+                  className="w-full py-4 bg-blue-900 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-blue-950 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                  <span>Guardar Nombre</span>
                 </button>
               </div>
+
+              {/* Company Logo */}
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <label className="text-[10px] uppercase tracking-widest font-black text-blue-900/40">Logo de la Empresa</label>
+                  <div className="flex bg-white p-1 rounded-lg border border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setLogoSource('url')}
+                      className={`px-3 py-1 text-[10px] font-black rounded-md transition-all ${logoSource === 'url' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogoSource('file')}
+                      className={`px-3 py-1 text-[10px] font-black rounded-md transition-all ${logoSource === 'file' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      GALERÍA
+                    </button>
+                  </div>
+                </div>
+
+                {logoSource === 'url' ? (
+                  <input
+                    type="text"
+                    value={appLogo.startsWith('data:') ? '' : appLogo}
+                    onChange={(e) => setAppLogo(e.target.value)}
+                    className="w-full bg-white border-2 border-slate-100 rounded-2xl py-4 px-6 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all"
+                    placeholder="https://ejemplo.com/logo.png"
+                  />
+                ) : (
+                  <div className="relative group">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoFileChange}
+                      className="hidden"
+                      id="company-logo-upload"
+                    />
+                    <label
+                      htmlFor="company-logo-upload"
+                      className="flex items-center justify-center gap-2 w-full bg-white border-2 border-dashed border-slate-200 rounded-2xl py-4 px-6 text-slate-500 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all"
+                    >
+                      <Upload size={18} />
+                      <span className="text-xs font-bold uppercase tracking-wider">Subir desde Galería</span>
+                    </label>
+                  </div>
+                )}
+
+                {appLogo && (
+                  <div className="space-y-2">
+                    <div className="flex justify-center p-6 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                      <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center overflow-hidden shadow-md border border-slate-100 p-2">
+                        <img src={appLogo} alt="Preview Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      </div>
+                    </div>
+                    <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Tamaño recomendado: 500x500px</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="h-px bg-slate-100" />
+
+          {/* Banner Config */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-900 rounded-xl flex items-center justify-center">
+                  <ImageIcon size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight">Banner de Inicio</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Carrusel de imágenes</p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer" 
+                  checked={showBanner}
+                  onChange={(e) => setShowBanner(e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-900"></div>
+              </label>
+            </div>
+            <div className="space-y-4">
+              <button 
+                onClick={() => setShowBannerManager(true)}
+                className="w-full py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-600 font-bold hover:bg-slate-100 transition-all"
+              >
+                Gestionar Banners
+              </button>
+              <div className="px-2 space-y-0.5">
+                <p className="text-[10px] font-black text-blue-900 uppercase tracking-tight">Tamaño Recomendado</p>
+                <p className="text-[10px] font-bold text-blue-600">1400 x 400 píxeles</p>
+              </div>
+            </div>
+            {showBannerManager && (
+              <BannerManager 
+                banners={banners} 
+                onClose={() => setShowBannerManager(false)} 
+                setIsSyncing={setIsSaving} 
+                onSuccess={() => {}} 
+              />
+            )}
+          </div>
+
+          <div className="h-px bg-slate-100" />
+
+          {/* WhatsApp Section */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-50 text-blue-900 rounded-xl flex items-center justify-center">
+                <Send size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight">WhatsApp de Pedidos</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Número que recibe los pedidos</p>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div className="flex flex-row gap-3">
+                <div className="w-24 sm:w-32 space-y-2">
+                  <p className="text-[10px] font-black text-blue-900/40 uppercase tracking-widest ml-2">Cód.</p>
+                  <select 
+                    value={countryCode} 
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-3 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all text-sm sm:text-base shadow-sm"
+                  >
+                    <option value="+58">🇻🇪 +58</option>
+                    <option value="+1">🇺🇸 +1</option>
+                    <option value="+34">🇪🇸 +34</option>
+                    <option value="+57">🇨🇴 +57</option>
+                  </select>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <p className="text-[10px] font-black text-blue-900/40 uppercase tracking-widest ml-2">Número de Teléfono</p>
+                  <input
+                    type="text"
+                    value={whatsappNumber}
+                    onChange={handleWhatsAppChange}
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-4 px-6 text-blue-900 font-bold focus:border-blue-900 focus:outline-none transition-all text-sm sm:text-base shadow-sm"
+                    placeholder="000-000.00.00"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={isSaving || isSyncing}
+                className="w-full py-4 bg-blue-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-950 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                GUARDAR NÚMERO
+              </button>
             </div>
           </div>
 
@@ -2144,7 +2686,7 @@ function ConfigPage({
           {/* Extraer Datos Section */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-blue-50 text-blue-900 rounded-xl flex items-center justify-center">
                 <Download size={20} />
               </div>
               <div>
@@ -2155,7 +2697,7 @@ function ConfigPage({
 
             <div className="bg-slate-50 p-6 rounded-[2rem] space-y-4">
               <p className="text-[10px] font-black text-blue-900/40 uppercase tracking-widest ml-2">Seleccionar campos:</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {exportFields.map(field => (
                   <button
                     key={field.id}
@@ -2195,7 +2737,7 @@ function ConfigPage({
                 <span className="text-[9px] font-black uppercase tracking-widest">PDF</span>
               </button>
               <button 
-                onClick={() => onCopySMS(selectedFields)}
+                onClick={() => onCopySMS(selectedFields.filter(f => f !== 'Imagen'))}
                 disabled={selectedFields.length === 0}
                 className="flex flex-col items-center gap-2 p-4 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 rounded-2xl transition-all group disabled:opacity-50"
               >
@@ -2206,7 +2748,7 @@ function ConfigPage({
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -2262,7 +2804,7 @@ function SortableBrandItem({ brand, onEdit, onDelete, onMove }: {
         className="flex-1 flex items-center gap-4 cursor-grab active:cursor-grabbing"
       >
         <div className="w-12 h-12 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 flex-shrink-0">
-          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
+          <img src={brand?.image} alt={brand?.name} className="w-full h-full object-contain p-1" referrerPolicy="no-referrer" />
         </div>
         <span className="font-bold text-blue-900">{brand.name}</span>
       </div>
@@ -2665,12 +3207,334 @@ function BrandManager({ brands, onClose, setIsSyncing, onSuccess }: {
   );
 }
 
+function BannerManager({ banners, onClose, setIsSyncing, onSuccess }: {
+  banners: Banner[],
+  onClose: () => void,
+  setIsSyncing: (s: boolean) => void,
+  onSuccess: () => void
+}) {
+  const [editingBanner, setEditingBanner] = useState<Partial<Banner> | null>(null);
+  const [imageSource, setImageSource] = useState<'url' | 'file'>('url');
+  const [localBanners, setLocalBanners] = useState<Banner[]>(banners);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [bannerToDelete, setBannerToDelete] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalBanners(banners);
+  }, [banners]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 1,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (over && active.id !== over.id) {
+      const oldIndex = localBanners.findIndex((b) => b.id === active.id);
+      const newIndex = localBanners.findIndex((b) => b.id === over.id);
+      
+      const newBanners = arrayMove(localBanners, oldIndex, newIndex);
+      setLocalBanners(newBanners);
+      
+      setIsSyncing(true);
+      try {
+        const batch = writeBatch(db);
+        newBanners.forEach((banner: Banner, index: number) => {
+          batch.update(doc(db, 'banners', banner.id), { order: index });
+        });
+        await batch.commit();
+        onSuccess();
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, 'banners');
+        setLocalBanners(banners);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+  };
+
+  const handleMove = async (id: string, direction: 'up' | 'down') => {
+    const index = localBanners.findIndex((b) => b.id === id);
+    if (index === -1) return;
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === localBanners.length - 1) return;
+
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    const newBanners = arrayMove(localBanners, index, newIndex);
+    setLocalBanners(newBanners);
+    
+    setIsSyncing(true);
+    try {
+      const batch = writeBatch(db);
+      newBanners.forEach((banner: Banner, index: number) => {
+        batch.update(doc(db, 'banners', banner.id), { order: index });
+      });
+      await batch.commit();
+      onSuccess();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'banners');
+      setLocalBanners(banners);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && editingBanner) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingBanner({ ...editingBanner, image: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const saveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBanner?.image) return;
+
+    setIsSyncing(true);
+    try {
+      if (editingBanner.id) {
+        const { id, ...data } = editingBanner;
+        await updateDoc(doc(db, 'banners', id), {
+          ...data,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'banners'), {
+          ...editingBanner,
+          order: banners.length,
+          createdAt: serverTimestamp()
+        });
+      }
+      setEditingBanner(null);
+      onSuccess();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'banners');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deleteBanner = (id: string) => {
+    setBannerToDelete(id);
+  };
+
+  const confirmDeleteBanner = async () => {
+    if (!bannerToDelete) return;
+    setIsSyncing(true);
+    try {
+      await deleteDoc(doc(db, 'banners', bannerToDelete));
+      setBannerToDelete(null);
+      onSuccess();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `banners/${bannerToDelete}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200"
+      >
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+              <ImageIcon size={20} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Gestionar Banners</h3>
+              <p className="text-xs text-slate-500">Configuración del carrusel de inicio</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white">
+          {editingBanner ? (
+            <form onSubmit={saveBanner} className="space-y-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-700">
+                    <ImageIcon size={18} className="text-blue-500" />
+                    <span className="text-sm font-semibold uppercase tracking-wider">
+                      {editingBanner.id ? 'Editar' : 'Añadir'} Banner
+                    </span>
+                  </div>
+                  <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setImageSource('url')}
+                      className={`px-3 py-1 text-[10px] font-black rounded-md transition-all ${imageSource === 'url' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageSource('file')}
+                      className={`px-3 py-1 text-[10px] font-black rounded-md transition-all ${imageSource === 'file' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      ARCHIVO
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-5">
+                  <div className="flex-1 space-y-4">
+                    {imageSource === 'url' ? (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Enlace de imagen</p>
+                        <input
+                          type="url"
+                          value={editingBanner.image?.startsWith('data:') ? '' : editingBanner.image}
+                          onChange={(e) => setEditingBanner({ ...editingBanner, image: e.target.value })}
+                          className="w-full bg-white border border-slate-200 rounded-xl py-3 px-4 text-sm text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-none transition-all shadow-sm"
+                          placeholder="https://..."
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Archivo local</p>
+                        <div className="relative group">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="hidden"
+                            id="banner-upload"
+                          />
+                          <label
+                            htmlFor="banner-upload"
+                            className="flex items-center justify-center gap-2 w-full bg-white border-2 border-dashed border-slate-200 rounded-xl py-4 px-4 text-slate-500 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-all group-hover:shadow-md"
+                          >
+                            <Upload size={18} className="group-hover:text-blue-500" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Subir Imagen</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {editingBanner.image && (
+                      <div className="relative group rounded-2xl overflow-hidden border border-slate-200 shadow-sm aspect-[1200/310] bg-slate-100">
+                        <img 
+                          src={editingBanner.image} 
+                          alt="Preview" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <p className="text-white text-[10px] font-black uppercase tracking-widest">Vista Previa</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingBanner(null)}
+                      className="flex-1 py-3 text-slate-500 font-bold text-xs hover:bg-slate-100 rounded-xl transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="flex-2 bg-blue-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 active:scale-95"
+                    >
+                      {editingBanner.id ? 'Actualizar' : 'Añadir'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => setEditingBanner({ image: '' })}
+              className="w-full py-8 border-2 border-dashed border-blue-100 rounded-2xl text-blue-400 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 hover:border-blue-300 transition-all flex flex-col items-center gap-3 group"
+            >
+              <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Plus size={24} />
+              </div>
+              Añadir Nuevo Banner
+            </button>
+          )}
+
+          <div className="space-y-3">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              <SortableContext items={localBanners.map(b => b.id)} strategy={verticalListSortingStrategy}>
+                {localBanners.map((banner) => (
+                  <div key={banner.id} className="group flex items-center gap-4 bg-white border border-slate-100 rounded-2xl p-3 hover:shadow-lg hover:shadow-blue-900/5 transition-all">
+                    <div className="flex flex-col gap-0.5 mr-2">
+                      <button onClick={() => handleMove(banner.id, 'up')} className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"><ChevronUp size={18} /></button>
+                      <button onClick={() => handleMove(banner.id, 'down')} className="p-0.5 text-slate-400 hover:text-blue-600 transition-colors"><ChevronDown size={18} /></button>
+                    </div>
+                    <div className="flex-1 flex items-center gap-4 cursor-grab">
+                      <div className="w-32 h-16 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center border border-slate-100 flex-shrink-0 shadow-sm">
+                        <img src={banner?.image} alt="Banner" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <div className="hidden sm:block">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Banner #{banner.order + 1}</p>
+                        <p className="text-xs font-bold text-slate-600 truncate max-w-[150px]">{banner.image?.substring(0, 30)}...</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button onClick={() => setEditingBanner(banner)} className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Edit2 size={18} /></button>
+                      <button onClick={() => deleteBanner(banner.id)} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={18} /></button>
+                    </div>
+                  </div>
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        </div>
+
+      </motion.div>
+
+
+      {bannerToDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm space-y-4">
+            <h3 className="font-bold text-lg text-slate-800">¿Eliminar banner?</h3>
+            <p className="text-sm text-slate-500">Esta acción no se puede deshacer.</p>
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setBannerToDelete(null)} className="flex-1 py-3 text-slate-500 font-bold">Cancelar</button>
+              <button onClick={confirmDeleteBanner} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ 
   products, 
   brands, 
   onLogout, 
   isSyncing, 
   setIsSyncing, 
+  setActiveView,
   onSuccess, 
   user
 }: { 
@@ -2679,6 +3543,7 @@ function AdminDashboard({
   onLogout: () => void,
   isSyncing: boolean,
   setIsSyncing: (s: boolean) => void,
+  setActiveView: (view: 'products' | 'about' | 'payment' | 'calculator' | 'admin' | 'config') => void,
   onSuccess: () => void,
   user: User | null
 }) {
@@ -2746,57 +3611,49 @@ function AdminDashboard({
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-40">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-3 space-y-6">
           <div className="bg-blue-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-blue-900/20 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-              <Lock size={120} />
-            </div>
-            <div className="relative z-10 space-y-6">
-              <div>
-                <div className="flex items-center gap-4 mb-1">
-                  <h2 className="text-xl font-black uppercase tracking-tight leading-none">Panel de Control</h2>
-                  <button
-                    onClick={onLogout}
-                    className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-all active:scale-95 group"
-                    title="Cerrar Sesión"
-                  >
-                    <LogOut size={18} className="text-white group-hover:translate-x-0.5 transition-transform" />
-                  </button>
+            <div className="relative z-10 flex flex-col items-center text-center space-y-6">
+              <div className="space-y-6">
+                <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 mx-auto shadow-xl group-hover:scale-110 transition-transform duration-500">
+                  <Package size={32} className="text-white" />
                 </div>
-                <p className="text-blue-200 text-[10px] font-black uppercase tracking-[0.2em]">GESTIÓN DE INVENTARIO</p>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight leading-none whitespace-nowrap">
+                  Gestión de inventario
+                </h2>
               </div>
 
-              <div className="pt-4 border-t border-white/10 flex items-center justify-between">
+              <div className="w-full pt-6 border-t border-white/10 flex items-center justify-around gap-2">
                 <button 
                   onClick={() => setAdminFilter('all')}
-                  className={`text-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'all' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                  className={`flex flex-col items-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'all' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
                 >
                   <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1">Total</p>
-                  <p className="text-2xl font-black">{products.length}</p>
+                  <p className="text-3xl font-black">{products.length}</p>
                 </button>
                 <button 
                   onClick={() => setAdminFilter('visible')}
-                  className={`text-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'visible' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                  className={`flex flex-col items-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'visible' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
                 >
                   <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1">Visibles</p>
-                  <p className="text-2xl font-black">{products.filter(p => !p.hidden).length}</p>
+                  <p className="text-3xl font-black">{products.filter(p => !p.hidden).length}</p>
                 </button>
                 <button 
                   onClick={() => setAdminFilter('hidden')}
-                  className={`text-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'hidden' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                  className={`flex flex-col items-center transition-all hover:scale-110 active:scale-95 ${adminFilter === 'hidden' ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
                 >
                   <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1">Ocultos</p>
-                  <p className="text-2xl font-black">{products.filter(p => p.hidden).length}</p>
+                  <p className="text-3xl font-black">{products.filter(p => p.hidden).length}</p>
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="w-full pt-2">
                 <button
                   onClick={() => setEditingProduct({ id: '', name: '', description: '', size: '', price: 0, image: '', category: 'Cuidado Personal', hidden: false })}
-                  className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black text-sm hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-xl shadow-emerald-900/20 active:scale-95"
+                  className="w-full bg-emerald-500 text-white py-4 rounded-2xl font-black text-sm hover:bg-emerald-600 transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-900/40 active:scale-95"
                 >
                   <Plus size={20} strokeWidth={3} />
-                  Nuevo Producto
+                  NUEVO PRODUCTO
                 </button>
               </div>
             </div>
@@ -2843,8 +3700,8 @@ function AdminDashboard({
                         )}
 
                         <div className="w-20 h-20 md:w-28 md:h-28 bg-white rounded-2xl overflow-hidden border border-slate-50 flex-shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-500 relative">
-                          <img src={product.image} alt={product.name} className={`w-full h-full object-contain p-2 ${product.hidden ? 'grayscale opacity-50' : ''}`} referrerPolicy="no-referrer" />
-                          {product.hidden && (
+                          <img src={product?.image} alt={product?.name} className={`w-full h-full object-contain p-2 ${product?.hidden ? 'grayscale opacity-50' : ''}`} referrerPolicy="no-referrer" />
+                          {product?.hidden && (
                             <div className="absolute inset-0 flex items-center justify-center bg-amber-900/5">
                               <EyeOff size={24} className="text-amber-500/30" />
                             </div>
